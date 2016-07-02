@@ -74,12 +74,13 @@ local function _createClass(name, super)
   local dict = {}
   dict.__index = dict
 
-  local aClass = { name = name, super = super, static = {},
+  local aClass = { name = name, super = super, static = {}, meta = {},
                    __instanceDict = dict, __declaredMethods = {},
                    subclasses = setmetatable({}, {__mode='k'})  }
 
   if super then
     setmetatable(aClass.static, { __index = function(_,k) return rawget(dict,k) or super.static[k] end })
+    setmetatable(aClass.meta, { __index = function(_,k) return super.meta[k] end })
   else
     setmetatable(aClass.static, { __index = function(_,k) return rawget(dict,k) end })
   end
@@ -94,11 +95,15 @@ local function _includeMixin(aClass, mixin)
   assert(type(mixin) == 'table', "mixin must be a table")
 
   for name,method in pairs(mixin) do
-    if name ~= "included" and name ~= "static" then aClass[name] = method end
+    if name ~= "included" and name ~= "static" and name ~= "meta" then aClass[name] = method end
   end
 
   for name,method in pairs(mixin.static or {}) do
     aClass.static[name] = method
+  end
+
+  for name,method in pairs(mixin.meta or {}) do
+    aClass.meta[name] = method
   end
 
   if type(mixin.included)=="function" then mixin:included(aClass) end
@@ -163,6 +168,19 @@ local DefaultMixin = {
 function middleclass.class(name, super)
   assert(type(name) == 'string', "A name (string) is needed for the new class")
   return super and super:subclass(name) or _includeMixin(_createClass(name), DefaultMixin)
+end
+
+function middleclass.metadata(aClass)
+  function go(aClass, metadata)
+    if aClass.super then
+      go(aClass.super, metadata)
+    end
+    for name,meta in pairs(aClass.meta or {}) do
+      metadata[name] = meta
+    end
+    return metadata
+  end
+  return go(aClass, {})
 end
 
 setmetatable(middleclass, { __call = function(_, ...) return middleclass.class(...) end })
